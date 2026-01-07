@@ -1,183 +1,337 @@
-name: "RDP + Tailscale + RustDesk + (Optional) Chrome Remote Desktop (A)"
+[span_1](start_span)name: RDP + Tailscale + RustDesk + (Optional) Chrome Remote Desktop (A)[span_1](end_span)
 
 on:
   workflow_dispatch:
     inputs:
-      ts_tailnet:      { description: "Tailscale tailnet (e.g. you@gmail.com)", required: true }
-      ts_api_key:      { description: "Tailscale API key (device admin, no Bearer)", required: true }
-      ts_authkey:      { description: "Tailscale Auth key (reusable or ephemeral)", required: true }
-      quick_test:      { description: "Run 5-minute test", type: boolean, default: false }
-      runtime_minutes: { description: "Runtime (max 360; default 355 when not test)", required: false, default: "355" }
-      do_purge:        { description: "Purge bullet* devices at start (single instance only)", required: false, default: "true" }
-      cycles:          { description: "0=stop after A; N=handoffs left incl this run", required: false, default: "0" }
-      rdp_count:       { description: "How many RDP instances (1-10) [ignored if CRD provided]", required: false, default: "1" }
-      crd_code:        { description: "Paste raw CRD code or command containing --code=\"4/...\"", required: false, default: "" }
-      crd_pin:         { description: "CRD PIN (6–12 digits)", required: false, default: "123456" }
+      [span_2](start_span)ts_tailnet:         { description: "Tailscale tailnet (e.g. you@gmail.com)", required: true }[span_2](end_span)
+      [span_3](start_span)ts_api_key:         { description: "Tailscale API key (device admin, no Bearer)", required: true }[span_3](end_span)
+      [span_4](start_span)ts_authkey:         { description: "Tailscale Auth key (reusable or ephemeral)", required: true }[span_4](end_span)
+      [span_5](start_span)quick_test:         { description: "Run 5-minute test", type: boolean, default: false }[span_5](end_span)
+      [span_6](start_span)runtime_minutes:    { description: "Runtime (max 360; default 355 when not test)", required: false, default: "355" }[span_6](end_span)
+      [span_7](start_span)do_purge:           { description: "Purge bullet* devices at start (single instance only)", required: false, default: "true" }[span_7](end_span)
+      [span_8](start_span)cycles:             { description: "0=stop after A; N=handoffs left incl this run", required: false, default: "0" }[span_8](end_span)
+      [span_9](start_span)rdp_count:          { description: "How many RDP instances (1-10) [ignored if CRD provided]", required: false, default: "1" }[span_9](end_span)
+      crd_code:
+        description: >-
+          Paste raw CRD code (4/0AV...), full PowerShell command, or text/URL containing --code="4/...".
+          If provided -> single instance; [span_10](start_span)CRD launches first.[span_10](end_span)
+        required: false
+        default: ""
+      crd_pin:
+        [span_11](start_span)description: "CRD PIN (6–12 digits). Used when launching CRD to avoid interactive prompt."[span_11](end_span)
+        required: false
+        [span_12](start_span)default: "123456"[span_12](end_span)
 
 permissions:
   contents: read
-  actions: write
+  [span_13](start_span)actions: write[span_13](end_span)
 
 defaults:
   run:
-    shell: pwsh
+    [span_14](start_span)shell: pwsh[span_14](end_span)
 
 jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.mk.outputs.matrix }}
-      multi:  ${{ steps.mk.outputs.multi }}
+      [span_15](start_span)multi:  ${{ steps.mk.outputs.multi }}[span_15](end_span)
     steps:
       - id: mk
         run: |
           $crd = @'
           ${{ inputs.crd_code }}
-          '@.Trim()
+          [span_16](start_span)'@.Trim()[span_16](end_span)
 
           if ($crd.Length -gt 0) { $n = 1 } else {
-            $n = [int]"${{ inputs.rdp_count }}"
-            if ($n -lt 1) { $n = 1 }
-            if ($n -gt 10) { $n = 10 }
+            $n = [int]"${{ inputs.rdp_count }}";
+            [span_17](start_span)if ($n -lt 1) { $n = 1 }; if ($n -gt 10) { $n = 10 }[span_17](end_span)
           }
 
-          $inc = @()
-          for ($i=1; $i -le $n; $i++){ $inc += @{ id = $i } }
-          $json = @{ include = $inc } | ConvertTo-Json -Compress
-          "matrix=$json" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $inc = @();
+          [span_18](start_span)for ($i=1; $i -le $n; $i++){ $inc += @{ id = $i } }[span_18](end_span)
+          $json = @{ include = $inc } | [span_19](start_span)ConvertTo-Json -Compress[span_19](end_span)
+          "matrix=$json" | [span_20](start_span)Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8[span_20](end_span)
 
           $multi = if ($n -gt 1) { '1' } else { '0' }
-          "multi=$multi" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "multi=$multi" | [span_21](start_span)Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8[span_21](end_span)
 
   rdp:
     needs: setup
     runs-on: windows-latest
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-      max-parallel: 10
+      [span_22](start_span)max-parallel: 10[span_22](end_span)
     timeout-minutes: 370
     env:
       RDP_USER: Bullettemporary
-      RDP_PASS: "Bullet@12345"
+      [span_23](start_span)RDP_PASS: Bullet@12345[span_23](end_span)
 
     steps:
-      - name: Set CRD flag early
+      - name: Set CRD flag early (safe read)
         run: |
           $crd = @'
           ${{ inputs.crd_code }}
-          '@.Trim()
-          $flag = if ($crd.Length -gt 0) { "1" } else { "0" }
-          "CRD_ENABLED=$flag" | Out-File -Append $env:GITHUB_ENV
-          Write-Host "CRD_ENABLED=$flag"
+          [span_24](start_span)'@.Trim()[span_24](end_span)
+          if ($crd.Length -gt 0) { "CRD_ENABLED=1" | Out-File -Append $env:GITHUB_ENV } else { "CRD_ENABLED=0" | [span_25](start_span)Out-File -Append $env:GITHUB_ENV }[span_25](end_span)
+          [span_26](start_span)Write-Host "CRD_ENABLED=$([int]($crd.Length -gt 0))"[span_26](end_span)
 
       - name: Install Chrome Remote Desktop Host (if missing)
         if: env.CRD_ENABLED == '1'
         run: |
-          $exe = "${Env:PROGRAMFILES(X86)}\Google\Chrome Remote Desktop\CurrentVersion\remoting_start_host.exe"
+          [span_27](start_span)$exe = "${Env:PROGRAMFILES(X86)}\Google\Chrome Remote Desktop\CurrentVersion\remoting_start_host.exe"[span_27](end_span)
           if (-not (Test-Path $exe)) {
-            $exePath = "$env:TEMP\crd_installer.exe"
+            Write-Host "CRD host not found, attempting install (EXE -> MSI fallback)..."
+            $exePath = "$env:TEMP\chromeremotedesktophost.exe"
+            $ok = $false
             try {
-              Invoke-WebRequest -Uri "https://dl.google.com/support/remote_assistance/ChromotingHostSetup.exe" -OutFile $exePath
+              [span_28](start_span)Invoke-WebRequest -Uri "https://dl.google.com/support/remote_assistance/ChromotingHostSetup.exe" -OutFile $exePath -ErrorAction Stop[span_28](end_span)
               Start-Process -FilePath $exePath -ArgumentList "/silent","/install" -Wait
               Remove-Item $exePath -Force
+              $ok = $true
             } catch {
-              $msi = "$env:TEMP\crd_fallback.msi"
-              Invoke-WebRequest -Uri "https://dl.google.com/edgedl/chrome-remote-desktop/chromeremotedesktophost.msi" -OutFile $msi
-              Start-Process msiexec.exe -ArgumentList "/i","`"$msi`"","/quiet","/norestart" -Wait
-              Remove-Item $msi -Force
+              Write-Host "EXE installer failed or missing: $($_.Exception.Message)"
             }
-          }
+  
+            [span_29](start_span)if (-not $ok) {[span_29](end_span)
+              $msi = "$env:TEMP\chromeremotedesktophost.msi"
+              try {
+                Invoke-WebRequest -Uri "https://dl.google.com/edgedl/chrome-remote-desktop/chromeremotedesktophost.msi" -OutFile $msi -ErrorAction Stop
+                [span_30](start_span)Start-Process msiexec.exe -ArgumentList "/i","`"$msi`"","/quiet","/norestart" -Wait[span_30](end_span)
+                [span_31](start_span)Remove-Item $msi -Force[span_31](end_span)
+              } catch {
+                Write-Error "CRD MSI fallback failed: $($_.Exception.Message)"
+                [span_32](start_span)exit 1[span_32](end_span)
+              }
+            }
+          } else {
+            [span_33](start_span)Write-Host "CRD host already installed."[span_33](end_span)
+          [span_34](start_span)}
 
-      - name: Run Chrome Remote Desktop with PIN
+      - name: Run Chrome Remote Desktop (accept raw code / full cmd / url) with PIN
         if: env.CRD_ENABLED == '1'
         run: |
           $raw = @'
           ${{ inputs.crd_code }}
-          '@.Trim()
+          '@.Trim()[span_34](end_span)
           $pin = "${{ inputs.crd_pin }}".Trim()
-          if ($pin -notmatch '^\d{6,12}$') { Write-Error "Invalid CRD PIN"; exit 1 }
+          [span_35](start_span)if ($pin -notmatch '^\d{6,12}$') { Write-Error "crd_pin must be 6–12 digits."; exit 1 }[span_35](end_span)
 
           $starter = "${Env:PROGRAMFILES(X86)}\Google\Chrome Remote Desktop\CurrentVersion\remoting_start_host.exe"
-          if ($raw -match '--code\s*=\s*"?([^"\s]+)') {
-            $code = ([regex]::Match($raw,'--code\s*=\s*"?([^"\s]+)')).Groups[1].Value
-            Start-Process -FilePath $starter -ArgumentList @("--code=""$code""","--redirect-url=""https://remotedesktop.google.com/_/oauthredirect""","--name=""$Env:COMPUTERNAME""","--pin=""$pin""")
-          } elseif ($raw -match '^4/') {
-            Start-Process -FilePath $starter -ArgumentList @("--code=""$raw""","--redirect-url=""https://remotedesktop.google.com/_/oauthredirect""","--name=""$Env:COMPUTERNAME""","--pin=""$pin""")
-          } elseif ($raw -match 'remoting_start_host\.exe') {
+          [span_36](start_span)if (-not (Test-Path $starter)) { Write-Error "remoting_start_host.exe not found."; exit 1 }[span_36](end_span)
+
+          $isFull = $false; [span_37](start_span)$code = $null[span_37](end_span)
+          if ($raw -match 'remoting_start_host\.exe') { $isFull = $true }
+          if ($raw -match '--code\s*=\s*"?([^"\s]+)') { $code = ([regex]::Match($raw,'--code\s*=\s*"?([^"\s]+)')).Groups[1].Value }
+          [span_38](start_span)elseif ($raw -match '^4\/') { $code = $raw }[span_38](end_span)
+
+          if ($code) {
+            $redir = "https://remotedesktop.google.com/_/oauthredirect"
+            $name  = $Env:COMPUTERNAME
+            [span_39](start_span)$args  = @("--code=""$code""","--redirect-url=""$redir""","--name=""$name""","--pin=""$pin""")[span_39](end_span)
+            Start-Process -FilePath $starter -ArgumentList $args
+          } elseif ($isFull) {
             $tmp = "$env:TEMP\crd_full.ps1"
-            Set-Content -Path $tmp -Value $raw -Encoding UTF8
-            powershell -ExecutionPolicy Bypass -File $tmp
+            [span_40](start_span)Set-Content -Path $tmp -Value $raw -Encoding UTF8[span_40](end_span)
+            [span_41](start_span)powershell -ExecutionPolicy Bypass -File $tmp[span_41](end_span)
           } else {
-            Write-Error "No CRD code detected"; exit 1
+            Write-Error "Could not detect CRD code. Provide raw code (4/...), full command, or string containing --code=\"4/...\""
+            exit 1
           }
+          [span_42](start_span)Write-Host "CRD launch step completed with PIN."[span_42](end_span)
+
+      - name: Verify CRD registration (service + recent logs)
+        if: env.CRD_ENABLED == '1'
+        run: |
+          [span_43](start_span)$svcName = "Chrome Remote Desktop Service"[span_43](end_span)
+          $deadline = (Get-Date).AddSeconds(60)
+          $ok = $false
+          while ((Get-Date) -lt $deadline) {
+            $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+            [span_44](start_span)if ($svc -and $svc.Status -in 'Running','StartPending') { $ok = $true; break }[span_44](end_span)
+            Start-Sleep -Seconds 3
+          }
+          [span_45](start_span)if ($ok) { Write-Host "[$svcName] status: Running or starting."[span_45](end_span)
+          } else { Write-Warning "[$svcName] not running yet." [span_46](start_span)}
+
+          $logDir = "$env:ProgramData\Google\Chrome Remote Desktop"
+          if (Test-Path $logDir) {
+            Get-ChildItem $logDir -Filter "host*.log" |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 2 | ForEach-Object {[span_46](end_span)
+              Write-Host "----- LOG: $($_.FullName) -----"
+              Get-Content $_.FullName -Tail 200
+            }
+          [span_47](start_span)} else { Write-Host "CRD log directory not found: $logDir" }[span_47](end_span)
+
+      - [span_48](start_span)name: Decide hostname + runtime[span_48](end_span)
+        run: |
+          [span_49](start_span)if ("${{ inputs.rdp_count }}" -gt 1) { $hn = "bullet${{ matrix.id }}" } else { $hn = "bullet" }[span_49](end_span)
+          "TS_HOSTNAME=$hn" | [span_50](start_span)Out-File -Append $env:GITHUB_ENV[span_50](end_span)
+
+          function Yes($v){ "$v" -match '^(?i:true|1|yes|on)$' }
+          function IntOr($v,$d){ if("$v" -match '^\d+$'){ [int]$v } else { [int]$d } }
+          $runtime = IntOr("${{ inputs.runtime_minutes }}",355)
+          if (Yes("${{ inputs.quick_test }}")) { $runtime = 5 }
+          if (-not (Yes("${{ inputs.quick_test }}")) -and $runtime -lt 6) { $runtime = 355 }
+          [span_51](start_span)if ($runtime -gt 360) { $runtime = 355 }[span_51](end_span)
+          "RUNTIME_MINUTES=$runtime" | [span_52](start_span)Out-File -Append $env:GITHUB_ENV[span_52](end_span)
+          [span_53](start_span)Write-Host "Hostname: $hn  | Runtime: $runtime"[span_53](end_span)
 
       - name: Purge bullet* devices (single-instance only)
         if: ${{ needs.setup.outputs.multi == '0' }}
         run: |
-          function Yes($v){ "$v" -match '^(?i:true|1|yes|on)$' }
+          [span_54](start_span)function Yes($v){ "$v" -match '^(?i:true|1|yes|on)$' }[span_54](end_span)
           if (Yes("${{ inputs.do_purge }}")) {
             try {
               $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("${{ inputs.ts_api_key }}:"))
               $tn = [uri]::EscapeDataString("${{ inputs.ts_tailnet }}")
-              $list = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/$tn/devices" -Headers @{ Authorization = "Basic $auth" }
-              foreach($d in $list.devices){
+              [span_55](start_span)$list = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/$tn/devices" -Headers @{ Authorization = "Basic $auth" }[span_55](end_span)
+              [span_56](start_span)foreach($d in $list.devices){[span_56](end_span)
                 if ($d.hostname -match '^bullet[0-9]*$'){
                   Invoke-RestMethod -Method Delete -Uri "https://api.tailscale.com/api/v2/device/$($d.id)" -Headers @{ Authorization = "Basic $auth" } -ErrorAction SilentlyContinue
                 }
               }
-            } catch { Write-Warning "Purge warning: $($_.Exception.Message)" }
-          }
+              [span_57](start_span)Write-Host "Purged bullet* devices (if any)."[span_57](end_span)
+            } catch { Write-Host "Purge warning: $($_.Exception.Message)" }
+          } else {
+            [span_58](start_span)Write-Host "Purge disabled."[span_58](end_span)
+          [span_59](start_span)}
 
       - name: Install + Up Tailscale
         run: |
-          $ts = "$env:ProgramFiles\Tailscale\tailscale.exe"
+          $ts = "$env:ProgramFiles\Tailscale\tailscale.exe"[span_59](end_span)
           if (-not (Test-Path $ts)) {
-            $msi = "$env:TEMP\ts.msi"
-            Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi" -OutFile $msi
-            Start-Process msiexec.exe -ArgumentList "/i","`"$msi`"","/quiet","/norestart" -Wait
-            Remove-Item $msi -Force
+            $url = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+            $dst = "$env:TEMP\tailscale.msi"
+            Invoke-WebRequest -Uri $url -OutFile $dst
+            Start-Process msiexec.exe -ArgumentList "/i","`"$dst`"","/quiet","/norestart" -Wait
+            [span_60](start_span)Remove-Item $dst -Force[span_60](end_span)
           }
-          & $ts logout | Out-Null
-          & $ts up --authkey "${{ inputs.ts_authkey }}" --hostname "$env:TS_HOSTNAME" --accept-dns --accept-routes
-          $ip4 = & $ts ip -4 | Select-Object -First 1
-          "TAILSCALE_IP=$ip4" | Out-File -Append $env:GITHUB_ENV
-          Write-Host "Tailscale IPv4: $ip4"
+          & $ts logout | [span_61](start_span)Out-Null[span_61](end_span)
+          & $ts up --authkey "${{ inputs.ts_authkey }}" --hostname "$env:TS_HOSTNAME" --accept-dns=true --accept-routes=true
+          $ip4 = & $ts ip -4 | [span_62](start_span)Select-Object -First 1[span_62](end_span)
+          "TAILSCALE_IP=$ip4" | [span_63](start_span)Out-File -Append $env:GITHUB_ENV[span_63](end_span)
+          [span_64](start_span)Write-Host "Tailscale IPv4: $ip4"[span_64](end_span)
+
+      - name: Enable RDP user + firewall
+        run: |
+          $u=$env:RDP_USER; [span_65](start_span)$p=$env:RDP_PASS[span_65](end_span)
+          $sec = ConvertTo-SecureString $p -AsPlainText -Force
+          if (-not (Get-LocalUser -Name $u -EA SilentlyContinue)) {
+            New-LocalUser -Name $u -Password $sec -AccountNeverExpires
+            Add-LocalGroupMember -Group "Administrators" -Member $u
+            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u
+          } else {
+            [span_66](start_span)Set-LocalUser -Name $u -Password $sec -AccountNeverExpires[span_66](end_span)
+            Enable-LocalUser -Name $u
+            Add-LocalGroupMember -Group "Administrators" -Member $u -EA SilentlyContinue
+            Add-LocalGroupMember -Group "Remote Desktop Users" -Member $u -EA SilentlyContinue
+          }
+          [span_67](start_span)Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0[span_67](end_span)
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" | [span_68](start_span)Out-Null[span_68](end_span)
+          [span_69](start_span)Write-Host "RDP ready. user=$u pass=$p host=$env:TS_HOSTNAME ip=$env:TAILSCALE_IP"[span_69](end_span)
+
+      - name: Install Python libs (pyautogui/pynput/pillow)
+        run: |
+          [span_70](start_span)python -m pip install --upgrade pip[span_70](end_span)
+          python -m pip install --force-reinstall pyautogui pynput pillow
+          [span_71](start_span)python -c "import pyautogui, pynput, PIL; print('Python libs OK')"[span_71](end_span)
 
       - name: Install RustDesk
         run: |
-          $rdExe = "C:\Program Files\RustDesk\rustdesk.exe"
+          [span_72](start_span)$rdExe = "C:\Program Files\RustDesk\rustdesk.exe"[span_72](end_span)
           if (-not (Test-Path $rdExe)) {
-            $msi = "$env:TEMP\rd.msi"
-            Invoke-WebRequest -Uri "https://github.com/rustdesk/rustdesk/releases/download/1.3.1/rustdesk-1.3.1-x86_64.msi" -OutFile $msi
-            Start-Process msiexec.exe -ArgumentList "/i","`"$msi`"","/quiet","/norestart" -Wait
-            Remove-Item $msi -Force
+            try {
+              $rdUrl = "https://github.com/rustdesk/rustdesk/releases/download/1.3.1/rustdesk-1.3.1-x86_64.msi"
+              $installerPath = "$env:TEMP\rustdesk.msi"
+              Invoke-WebRequest -Uri $rdUrl -OutFile $installerPath
+              [span_73](start_span)Start-Process msiexec.exe -ArgumentList "/i","`"$installerPath`"","/quiet","/norestart" -Wait[span_73](end_span)
+              [span_74](start_span)Remove-Item $installerPath -Force[span_74](end_span)
+            } catch {
+              Write-Host "MSI install failed, trying winget…"
+              winget install --id RustDesk.RustDesk -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+            }
           }
-          if (-not (Test-Path $rdExe)) { Write-Error "RustDesk install failed"; exit 1 }
+          [span_75](start_span)if (-not (Test-Path $rdExe)) { Write-Error "RustDesk not found after install"; exit 1 }[span_75](end_span)
+          [span_76](start_span)Write-Host "RustDesk installed."[span_76](end_span)
 
-      - name: Launch RustDesk + Screenshot
+      - [span_77](start_span)name: Open RustDesk ports (TCP 21115-21119, UDP 21116)[span_77](end_span)
         run: |
-          $rdExe = "C:\Program Files\RustDesk\rustdesk.exe"
-          Start-Process -FilePath $rdExe
+          [span_78](start_span)for ($p=21115; $p -le 21119; $p++) {[span_78](end_span)
+            $name = "APP-PORT-TCP-$p"
+            netsh advfirewall firewall delete rule name=$name 2>$null
+            netsh advfirewall firewall add rule name=$name dir=in action=allow protocol=TCP localport=$p
+          }
+          $udpName = "APP-PORT-UDP-21116"
+          [span_79](start_span)netsh advfirewall firewall delete rule name=$udpName 2>$null[span_79](end_span)
+          [span_80](start_span)netsh advfirewall firewall add rule name=$udpName dir=in action=allow protocol=UDP localport=21116[span_80](end_span)
+
+      # --- ИСПРАВЛЕННЫЙ ШАГ (БЕЗ ОШИБКИ JSON) ---
+      - name: Launch RustDesk (foreground) + Screenshot to Gofile
+        run: |
+          [span_81](start_span)$rdExe = "C:\Program Files\RustDesk\rustdesk.exe"[span_81](end_span)
+          Start-Process -FilePath $rdExe -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
 
-          $path = "$env:TEMP\rd_${{ matrix.id }}.png"
-          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-          $b=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-          $bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height
-          $g=[System.Drawing.Graphics]::FromImage($bmp)
-          $g.CopyFromScreen($b.Location,[Drawing.Point]::Empty,$b.Size)
-          $bmp.Save($path,[Drawing.Imaging.ImageFormat]::Png)
-          $g.Dispose(); $bmp.Dispose()
+          [span_82](start_span)$screenshotPath = "$env:TEMP\rustdesk_${{ matrix.id }}.png"[span_82](end_span)
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          [span_83](start_span)$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds[span_83](end_span)
+          $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          [span_84](start_span)$graphics = [System.Drawing.Graphics]::FromImage($bitmap)[span_84](end_span)
+          $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          $bitmap.Save($screenshotPath, [System.Drawing.Imaging.ImageFormat]::Png)
+          $graphics.Dispose(); [span_85](start_span)$bitmap.Dispose()[span_85](end_span)
 
-          $resp = curl -F "file=@$path" "https://store1.gofile.io/uploadFile"
-          $data = ($resp -Raw).Trim() | ConvertFrom-Json -ErrorAction SilentlyContinue
-          if ($data.status -eq "ok") { "SCREENSHOT_URL=$($data.data.downloadPage)" | Out-File -Append $env:GITHUB_ENV }
+          try {
+            $serverResp = Invoke-RestMethod -Uri "https://api.gofile.io/getServer"
+            $server = $serverResp.data.server
+            $uploadUrl = "https://$($server).gofile.io/uploadFile"
 
-      - name: Keep alive
-        run: |
-          $mins=[int]"${{ inputs.runtime_minutes }}"
-          $end=(Get-Date).AddMinutes($mins)
-          while((Get-Date)-lt $end){
-            Write-Host "Heartbeat $((Get-Date).ToString('HH:mm:ss')) until $($end.ToString('HH:mm:ss'))"
-            Start-Sleep 60
+            $json = Invoke-RestMethod -Method Post -Uri $uploadUrl -Form @{
+                file = Get-Item -Path $screenshotPath
+            }
+
+            if ($json.status -eq "ok") {
+                $url = $json.data.downloadPage
+                "SCREENSHOT_URL=$url" | Out-File -Append $env:GITHUB_ENV
+                Write-Host "Screenshot uploaded: $url"
+            } else {
+                Write-Warning "Gofile returned status: $($json.status)"
+            }
+          } catch {
+            Write-Warning "Failed to upload screenshot: $($_.Exception.Message)"
+            "SCREENSHOT_URL=UploadFailed" | Out-File -Append $env:GITHUB_ENV
           }
+
+      - [span_86](start_span)name: Keep alive (to ${{ env.RUNTIME_MINUTES }} mins)[span_86](end_span)
+        run: |
+          [span_87](start_span)$mins = [int]"${{ env.RUNTIME_MINUTES }}"[span_87](end_span)
+          $end = (Get-Date).AddMinutes($mins)
+          while ((Get-Date) -lt $end) {
+            $mode = if ("$env:CRD_ENABLED" -eq '1') { '[CRD+RustDesk/RDP]' } else { '[RustDesk/RDP]' }
+            Write-Host ("$mode Heartbeat " + (Get-Date).ToString("HH:mm:ss") + " ends at " + $end.ToString("HH:mm:ss") + " | RS URL: $env:SCREENSHOT_URL")
+            Start-Sleep -Seconds 60
+          [span_88](start_span)}
+
+      - name: Dispatch next or stop[span_88](end_span)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [span_89](start_span)$cycles = [int]"${{ inputs.cycles }}"[span_89](end_span)
+          if ($cycles -gt 0) {
+            $next = $cycles - 1
+            if ($next -le 0) {
+              $url = "https://api.github.com/repos/${{ github.repository }}/actions/workflows/rdp-tailscale-stop.yml/dispatches"
+              $hdr = @{ Authorization = "Bearer $env:GH_TOKEN"; [span_90](start_span)Accept = "application/vnd.github+json" }[span_90](end_span)
+              [span_91](start_span)$payload = @{ ts_tailnet="${{ inputs.ts_tailnet }}"; ts_api_key="${{ inputs.ts_api_key }}"; base_prefix="bullet"; max_count="10"; dry_run="false" }[span_91](end_span)
+              $body = @{ ref="${{ github.ref_name }}"; inputs=$payload } | [span_92](start_span)ConvertTo-Json -Depth 20[span_92](end_span)
+              Invoke-WebRequest -Method POST -Uri $url -Headers $hdr -Body $body | [span_93](start_span)Out-Null[span_93](end_span)
+              [span_94](start_span)Write-Host "Dispatched STOP."[span_94](end_span)
+            [span_95](start_span)} else {[span_95](end_span)
+              $payload = @{
+                ts_tailnet      = "${{ inputs.ts_tailnet }}"
+                ts_api_key      = "${{ inputs.ts_api_key }}"
+                ts_authkey      = "${{ inputs.ts_authkey }}"
+                [span_96](start_span)quick_test      = "${{ inputs.quick_test }}
